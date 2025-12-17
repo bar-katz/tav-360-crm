@@ -1,0 +1,111 @@
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Filter } from "lucide-react";
+
+export default function ClientFilters({ filters, onFiltersChange, clients }) {
+  const handleFilterChange = (key, value) => {
+    onFiltersChange(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const getUniqueValues = (field) => {
+    return [...new Set(clients.map(c => c[field]).filter(Boolean))];
+  };
+
+  const filterCounts = {
+    all: clients.length,
+    by_status: clients.reduce((acc, c) => {
+      acc[c.status] = (acc[c.status] || 0) + 1;
+      return acc;
+    }, {}),
+    by_category: clients.reduce((acc, c) => {
+      acc[c.request_category] = (acc[c.request_category] || 0) + 1;
+      return acc;
+    }, {})
+  };
+
+  return (
+    <Card className="shadow-lg border-0 sticky top-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Filter className="w-5 h-5 text-blue-600" />
+          סינון לקוחות
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">סטטוס</label>
+          <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                <div className="flex items-center justify-between w-full">
+                  <span>הכל</span>
+                  <Badge variant="outline" className="mr-2">{filterCounts.all}</Badge>
+                </div>
+              </SelectItem>
+              {getUniqueValues('status').map((status) => (
+                <SelectItem key={status} value={status}>
+                  <div className="flex items-center justify-between w-full">
+                    <span>{status}</span>
+                    <Badge variant="outline" className="mr-2">
+                      {filterCounts.by_status[status] || 0}
+                    </Badge>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-2 block">סוג בקשה</label>
+          <Select value={filters.request_category} onValueChange={(value) => handleFilterChange('request_category', value)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                <div className="flex items-center justify-between w-full">
+                  <span>הכל</span>
+                  <Badge variant="outline" className="mr-2">{filterCounts.all}</Badge>
+                </div>
+              </SelectItem>
+              {getUniqueValues('request_category').map((category) => (
+                <SelectItem key={category} value={category}>
+                  <div className="flex items-center justify-between w-full">  
+                    <span>{category}</span>
+                    <Badge variant="outline" className="mr-2">
+                      {filterCounts.by_category[category] || 0}
+                    </Badge>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-2 block">סוג נכס</label>
+          <Select value={filters.property_type} onValueChange={(value) => handleFilterChange('property_type', value)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">הכל</SelectItem>
+              {getUniqueValues('property_type').map((type) => (
+                <SelectItem key={type} value={type}>{type}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
