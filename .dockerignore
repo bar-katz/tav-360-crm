@@ -1,12 +1,3 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
 # Frontend
 frontend/node_modules
 frontend/dist
@@ -14,32 +5,31 @@ frontend/.env.local
 frontend/.env.production.local
 
 # Backend
+backend/venv
 backend/__pycache__
 backend/*.pyc
 backend/*.pyo
 backend/*.pyd
 backend/.Python
 backend/env
-backend/venv
 backend/.venv
 backend/uploads/*
 !backend/uploads/.gitkeep
 
 # Root
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
+.git
+.gitignore
+*.md
 .env
+.env.local
+.env.*.local
+docs/
+.vscode
+.idea
+*.swp
+*.swo
+*.log
+coverage
+.nyc_output
+.DS_Store
+Thumbs.db

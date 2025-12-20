@@ -1,0 +1,72 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: tav360-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tav360}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tav360secret}
+      POSTGRES_DB: ${POSTGRES_DB:-tav360_crm}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tav360}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tav360-network
+
+  # Python Backend API
+  # Independent service - can be deployed separately
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tav360-backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tav360}:${POSTGRES_PASSWORD:-tav360secret}@db:5432/${POSTGRES_DB:-tav360_crm}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:80,http://localhost}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-http://localhost:8000}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - tav360-network
+
+  # React Frontend
+  # Independent service - can be deployed separately
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000/api}
+    container_name: tav360-frontend
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000/api}
+      - VITE_AUTH_ENABLED=${VITE_AUTH_ENABLED:-true}
+      - VITE_APP_NAME=${VITE_APP_NAME:-TAV 360 CRM}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    # No dependency on backend - they run independently
+    networks:
+      - tav360-network
+
+volumes:
+  postgres_data:
+
+networks:
+  tav360-network:
+    driver: bridge
+
