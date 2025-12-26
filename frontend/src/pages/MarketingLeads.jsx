@@ -86,7 +86,7 @@ export default function MarketingLeadsPage() {
 
     if (filters.opt_out !== "all") {
        const optOutValue = filters.opt_out === "כן";
-       filtered = filtered.filter(lead => (lead.opt_out_whatsapp === "כן") === optOutValue);
+       filtered = filtered.filter(lead => (lead.opt_out_whatsapp === true) === optOutValue);
     }
 
     if (filters.seriousness !== "all") {
@@ -112,7 +112,7 @@ export default function MarketingLeadsPage() {
   const handleSelectAll = (checked) => {
     if (checked) {
       const eligibleLeads = filteredLeads
-        .filter(lead => lead.opt_out_whatsapp !== "כן")
+        .filter(lead => lead.opt_out_whatsapp !== true)
         .map(lead => lead.id);
       setSelectedLeads(eligibleLeads);
     } else {
@@ -164,7 +164,7 @@ export default function MarketingLeadsPage() {
       // עדכון כל הלידים הנבחרים
       for (let i = 0; i < selectedLeads.length; i++) {
         const leadId = selectedLeads[i];
-        await MarketingLead.update(leadId, { opt_out_whatsapp: "כן" });
+        await MarketingLead.update(leadId, { opt_out_whatsapp: true });
         
         // השהיה קטנה בין עדכונים
         if (i < selectedLeads.length - 1) {

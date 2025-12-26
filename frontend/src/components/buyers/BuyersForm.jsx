@@ -36,9 +36,14 @@ export default function BuyersForm({ buyer, contacts, onSubmit, onCancel }) {
   useEffect(() => {
     if (buyer) {
       setFormData({ 
-        ...buyer, 
+        ...buyer,
+        // Map database field names to form field names
+        request_category: buyer.request_type || buyer.request_category || 'קנייה',
+        desired_property_type: buyer.preferred_property_type || buyer.desired_property_type || 'דירה',
+        desired_area: buyer.neighborhood || buyer.desired_area || '',
+        desired_rooms: buyer.preferred_rooms || buyer.desired_rooms || '',
         budget: buyer.budget || '',
-        desired_property_type: buyer.desired_property_type || 'דירה' // Ensure default value
+        contact_id: buyer.contact_id || ''
       });
     }
   }, [buyer]);
@@ -50,9 +55,21 @@ export default function BuyersForm({ buyer, contacts, onSubmit, onCancel }) {
     setIsSubmitting(true);
 
     try {
+      // Map form field names to database field names
       const dataToSubmit = {
-        ...formData,
-        budget: formData.budget ? parseInt(formData.budget) : null
+        contact_id: formData.contact_id,
+        handler: formData.handler || null,
+        source: formData.source || null,
+        status: formData.status || null,
+        request_type: formData.request_category, // Map request_category to request_type
+        preferred_property_type: formData.desired_property_type, // Map desired_property_type to preferred_property_type
+        neighborhood: formData.desired_area, // Map desired_area to neighborhood
+        preferred_rooms: formData.desired_rooms, // Map desired_rooms to preferred_rooms
+        city: formData.city || null,
+        budget: formData.budget ? parseInt(formData.budget) : null,
+        parking: formData.parking || false,
+        air_conditioning: formData.air_conditioning || false,
+        storage: formData.storage || false
       };
 
       if (buyer) {

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { BuyersBrokerage, Contact, PropertyBrokerage, MatchesBrokerage } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +10,10 @@ import { motion } from "framer-motion";
 import BuyersList from "../components/buyers/BuyersList";
 import BuyersForm from "../components/buyers/BuyersForm";
 import BuyersFilters from "../components/buyers/BuyersFilters";
+import { getCategoryFromURL } from "@/utils/categoryFilters";
 
 export default function BuyersBrokeragePage() {
+  const [searchParams] = useSearchParams();
   const [buyers, setBuyers] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [properties, setProperties] = useState([]);
@@ -25,67 +28,71 @@ export default function BuyersBrokeragePage() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // קריאת פרמטר הקטגוריה מה-URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const categoryParam = urlParams.get('category') || 'מגורים';
-
-  const filterBuyers = useCallback(() => {
-    let filtered = buyers;
-
-    // סינון לפי קטגוריה מה-URL
-    filtered = filtered.filter(buyer => {
-      if (categoryParam === "מגורים") {
-        return buyer.desired_property_type === "דירה" || buyer.desired_property_type === "בית פרטי";
-      } else if (categoryParam === "משרדים") {
-        return buyer.desired_property_type === "משרד";
-      }
-      return true;
-    });
-
-    // סינון לפי חיפוש
-    if (searchTerm) {
-      filtered = filtered.filter(buyer => {
-        const contact = contacts.find(c => c.id === buyer.contact_id);
-        return contact?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-               buyer.city?.toLowerCase().includes(searchTerm.toLowerCase());
-      });
-    }
-
-    // סינון לפי פילטרים
-    if (filters.status !== "all") {
-      filtered = filtered.filter(buyer => buyer.status === filters.status);
-    }
-
-    if (filters.request_category !== "all") {
-      filtered = filtered.filter(buyer => buyer.request_category === filters.request_category);
-    }
-
-    if (filters.desired_property_type !== "all") {
-      filtered = filtered.filter(buyer => buyer.desired_property_type === filters.desired_property_type);
-    }
-
-    setFilteredBuyers(filtered);
-  }, [buyers, searchTerm, filters, categoryParam, contacts]);
+  // קריאת פרמטר הקטגוריה מה-URL - using unified utility with React Router
+  const categoryParam = getCategoryFromURL("מגורים", searchParams);
 
   useEffect(() => {
     loadData();
-  }, []);
-
-  useEffect(() => {
-    filterBuyers();
-  }, [filterBuyers]);
+  }, [categoryParam, searchTerm, filters]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [buyersData, contactsData, propertiesData] = await Promise.all([
-        BuyersBrokerage.list("-created_date"),
-        Contact.list(),
-        PropertyBrokerage.list()
-      ]);
+      // Build PostgREST filters
+      const postgrestFilters = {};
+      
+      // Category filter - use preferred_property_type
+      if (categoryParam === "מגורים") {
+        postgrestFilters.preferred_property_type = "in.(דירה,בית פרטי,בית)";
+      } else if (categoryParam === "משרדים") {
+        postgrestFilters.preferred_property_type = "in.(משרד,מסחרי)";
+      }
+      
+      // Status filter
+      if (filters.status !== "all") {
+        postgrestFilters.status = `eq.${filters.status}`;
+      }
+      
+      // Request type filter
+      if (filters.request_category !== "all") {
+        postgrestFilters.request_type = `eq.${filters.request_category}`;
+      }
+      
+      // Property type filter
+      if (filters.desired_property_type !== "all") {
+        postgrestFilters.preferred_property_type = `eq.${filters.desired_property_type}`;
+      }
+      
+      // Search filter - use PostgREST or operator
+      if (searchTerm) {
+        postgrestFilters.or = `(city.ilike.*${searchTerm}*,contact.full_name.ilike.*${searchTerm}*)`;
+      }
+      
+      // Load buyers with joined contact data using PostgREST
+      const buyersData = await BuyersBrokerage.list(postgrestFilters, {
+        select: ['*', 'contact(*)'],
+        order: 'created_date.desc',
+        limit: 1000
+      });
+      
       setBuyers(buyersData);
-      setContacts(contactsData);
+      setFilteredBuyers(buyersData);
+      
+      // Load properties for form (if needed)
+      const propertiesData = await PropertyBrokerage.list(
+        categoryParam ? { category: `eq.${categoryParam}` } : {},
+        { limit: 100 }
+      );
       setProperties(propertiesData);
+      
+      // Extract contacts from joined data
+      const contactsMap = new Map();
+      buyersData.forEach(buyer => {
+        if (buyer.contact) {
+          contactsMap.set(buyer.contact.id, buyer.contact);
+        }
+      });
+      setContacts(Array.from(contactsMap.values()));
     } catch (error) {
       console.error("Error loading data:", error);
     }
@@ -94,12 +101,14 @@ export default function BuyersBrokeragePage() {
 
   // סינון לקוחות לפי סוג בקשה לטאבים
   const getBuyersByRequestCategory = (requestCategory) => {
-    return filteredBuyers.filter(buyer => buyer.request_category === requestCategory);
+    return filteredBuyers.filter(buyer => {
+      const buyerRequestType = buyer.request_type || buyer.request_category;
+      return buyerRequestType === requestCategory;
+    });
   };
 
   const handleSubmit = async (buyerData) => {
     try {
-      // הטופס כבר משתמש בפונקציות האבטחה
       setShowForm(false);
       setEditingBuyer(null);
       loadData();
@@ -188,7 +197,7 @@ export default function BuyersBrokeragePage() {
 
               <TabsContent value="purchase" className="space-y-6">
                 <BuyersList
-                  buyers={getBuyersByRequestCategory("קנייה")}
+                  buyers={getBuyersByRequestCategory("מכירה")}
                   contacts={contacts}
                   isLoading={isLoading}
                   onEdit={handleEdit}

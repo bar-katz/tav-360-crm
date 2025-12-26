@@ -16,6 +16,7 @@ class Project(Base):
     total_units = Column(Integer)
     price_range_min = Column(Numeric)
     price_range_max = Column(Numeric)
+    status = Column(String)
     created_date = Column(DateTime(timezone=True), server_default=func.now())
     updated_date = Column(DateTime(timezone=True), onupdate=func.now())
     

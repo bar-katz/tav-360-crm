@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:80,http://localhost"
     # Backend base URL for generating file URLs (used in upload responses)
     BACKEND_BASE_URL: str = "http://localhost:8000"
+    # PostgREST URL for proxying entity requests
+    POSTGREST_URL: str = "http://postgrest:3000"
     
     @property
     def cors_origins_list(self) -> List[str]:

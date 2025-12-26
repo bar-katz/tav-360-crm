@@ -49,7 +49,8 @@ export default function PropertyOwnersPage() {
       
       // אם יש contact_id בפרמטרים, חפש את איש הקשר
       if (contactIdParam) {
-        const contact = contactsData.find(c => c.id === contactIdParam);
+        const contactIdNum = parseInt(contactIdParam, 10);
+        const contact = contactsData.find(c => c.id === contactIdNum || c.id === contactIdParam);
         setSelectedContact(contact);
       }
     } catch (error) {
@@ -63,7 +64,8 @@ export default function PropertyOwnersPage() {
 
     // סינון לפי איש קשר נבחר (אם יש)
     if (contactIdParam) {
-      filtered = filtered.filter(owner => owner.contact_id === contactIdParam);
+      const contactIdNum = parseInt(contactIdParam, 10);
+      filtered = filtered.filter(owner => owner.contact_id === contactIdNum || owner.contact_id === contactIdParam);
     }
 
     if (searchTerm) {

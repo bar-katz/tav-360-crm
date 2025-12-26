@@ -1,7 +1,7 @@
 """
 Tenant model
 """
-from sqlalchemy import Column, Integer, Numeric, Text, DateTime, Date, ForeignKey
+from sqlalchemy import Column, Integer, Numeric, Text, DateTime, Date, ForeignKey, String
 from sqlalchemy.sql import func
 from src.database import Base
 
@@ -16,6 +16,10 @@ class Tenant(Base):
     monthly_rent = Column(Numeric(15, 2))
     deposit = Column(Numeric(15, 2))
     notes = Column(Text)
+    source = Column(String(50))
+    status = Column(String(50))
+    handler = Column(String(255))
+    city = Column(String(100))
     created_date = Column(DateTime(timezone=True), server_default=func.now())
     updated_date = Column(DateTime(timezone=True), onupdate=func.now())
     

@@ -34,7 +34,7 @@ const navigationConfig = [
     ]
   },
   {
-    name: 'דשבורד ניהול נכסים', href: createPageUrl('PropertyManagementDashboard'), icon: Briefcase, roles: ['admin', 'office_manager', 'property_manager'],
+    name: 'דשבורד ניהול נכסים', href: createPageUrl('PropertyManagementDashboard'), icon: Briefcase, roles: ['admin', 'office_manager', 'property_manager', 'agent'],
     children: [
         { name: 'בעלי נכסים', href: createPageUrl('PropertyOwnerManagement'), icon: Briefcase, roles: ['admin', 'office_manager', 'property_manager'] },
         { name: 'דיירים', href: createPageUrl('Tenants'), icon: UserPlus, roles: ['admin', 'office_manager', 'property_manager'] },
@@ -43,7 +43,7 @@ const navigationConfig = [
     ]
   },
   {
-    name: 'דשבורד פרויקטים', href: createPageUrl('ProjectsDashboard'), icon: Target, roles: ['admin', 'office_manager', 'project_manager'],
+    name: 'דשבורד פרויקטים', href: createPageUrl('ProjectsDashboard'), icon: Target, roles: ['admin', 'office_manager', 'project_manager', 'agent'],
     children: [
         { name: 'פרויקטים', href: createPageUrl('Projects'), icon: Building2, roles: ['admin', 'office_manager', 'project_manager'] },
         { name: 'לידים לפרויקט', href: createPageUrl('ProjectLeads'), icon: Target, roles: ['admin', 'office_manager', 'project_manager'] },

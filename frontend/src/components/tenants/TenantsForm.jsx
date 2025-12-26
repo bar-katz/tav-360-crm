@@ -28,7 +28,7 @@ export default function TenantsForm({ tenant, contacts, properties, onSubmit, on
       setFormData({
         contact_id: tenant.contact_id || '',
         handler: tenant.handler || '',
-        current_property_id: tenant.current_property_id || '',
+        current_property_id: tenant.property_id || tenant.current_property_id || '',
         source: tenant.source || 'מאגר',
         status: tenant.status || 'מתעניין חדש',
         lease_start_date: tenant.lease_start_date || '',
@@ -42,9 +42,17 @@ export default function TenantsForm({ tenant, contacts, properties, onSubmit, on
   const handleSubmit = (e) => {
     e.preventDefault();
     
+    // Map form fields to database fields and clean up empty values
     const dataToSubmit = {
-      ...formData,
+      contact_id: formData.contact_id ? parseInt(formData.contact_id, 10) : null,
+      property_id: formData.current_property_id ? parseInt(formData.current_property_id, 10) : null,
+      lease_start_date: formData.lease_start_date || null,
+      lease_end_date: formData.lease_end_date || null,
       monthly_rent: formData.monthly_rent ? parseFloat(formData.monthly_rent) : null,
+      source: formData.source || null,
+      status: formData.status || null,
+      handler: formData.handler || null,
+      city: formData.city || null,
     };
     
     onSubmit(dataToSubmit);

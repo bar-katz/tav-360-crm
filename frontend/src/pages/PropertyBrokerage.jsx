@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PropertyBrokerage as PropertyBrokerageEntity, Contact } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +10,10 @@ import { motion } from "framer-motion";
 import PropertyBrokerageList from "../components/properties/PropertyBrokerageList";
 import PropertyBrokerageForm from "../components/properties/PropertyBrokerageForm";
 import PropertyBrokerageFilters from "../components/properties/PropertyBrokerageFilters";
+import { getCategoryFromURL } from "@/utils/categoryFilters";
 
 export default function PropertyBrokerage() {
+  const [searchParams] = useSearchParams();
   const [properties, setProperties] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [filteredProperties, setFilteredProperties] = useState([]);
@@ -27,72 +30,67 @@ export default function PropertyBrokerage() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // קריאת פרמטר הקטגוריה מה-URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const categoryParam = urlParams.get('category') || 'מגורים';
-
-  const filterProperties = useCallback(() => {
-    let filtered = properties;
-
-    // סינון לפי קטגוריה מה-URL
-    filtered = filtered.filter((property) => {
-      if (categoryParam === "מגורים") {
-        return property.category === "פרטי";
-      } else if (categoryParam === "משרדים") {
-        return property.category === "מסחרי";
-      }
-      return true;
-    });
-
-    // סינון לפי חיפוש
-    if (searchTerm) {
-      filtered = filtered.filter((property) =>
-      property.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property.street?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property.property_type?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // סינון לפי פילטרים
-    if (filters.status !== "all") {
-      filtered = filtered.filter((property) => property.status === filters.status);
-    }
-
-    // פילטרים ספציפיים למגורים בלבד
-    if (categoryParam === "מגורים") {
-      if (filters.property_type !== "all") {
-        filtered = filtered.filter((property) => property.property_type === filters.property_type);
-      }
-      
-      if (filters.rooms !== "all") {
-        filtered = filtered.filter((property) => property.rooms === filters.rooms);
-      }
-    }
-
-    if (filters.city !== "all") {
-      filtered = filtered.filter((property) => property.city === filters.city);
-    }
-
-    setFilteredProperties(filtered);
-  }, [properties, searchTerm, filters, categoryParam]);
+  // קריאת פרמטר הקטגוריה מה-URL - using unified utility with React Router
+  const categoryParam = getCategoryFromURL("מגורים", searchParams);
 
   useEffect(() => {
     loadData();
-  }, []);
-
-  useEffect(() => {
-    filterProperties();
-  }, [filterProperties]);
+  }, [categoryParam, searchTerm, filters]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [propertiesData, contactsData] = await Promise.all([
-      PropertyBrokerageEntity.list("-created_date"),
-      Contact.list()]
-      );
+      // Build PostgREST filters
+      const postgrestFilters = {};
+      
+      // Category filter
+      if (categoryParam) {
+        postgrestFilters.category = `eq.${categoryParam}`;
+      }
+      
+      // Status filter
+      if (filters.status !== "all") {
+        postgrestFilters.status = `eq.${filters.status}`;
+      }
+      
+      // Property type filter (only for residential)
+      if (categoryParam === "מגורים" && filters.property_type !== "all") {
+        postgrestFilters.property_type = `eq.${filters.property_type}`;
+      }
+      
+      // Rooms filter (only for residential)
+      if (categoryParam === "מגורים" && filters.rooms !== "all") {
+        postgrestFilters.rooms = `eq.${filters.rooms}`;
+      }
+      
+      // City filter
+      if (filters.city !== "all") {
+        postgrestFilters.city = `eq.${filters.city}`;
+      }
+      
+      // Search filter
+      if (searchTerm) {
+        postgrestFilters.or = `(city.ilike.*${searchTerm}*,street.ilike.*${searchTerm}*,property_type.ilike.*${searchTerm}*)`;
+      }
+      
+      // Load properties with joined contact data using PostgREST
+      const propertiesData = await PropertyBrokerageEntity.list(postgrestFilters, {
+        select: ['*', 'contact(*)'],
+        order: 'created_date.desc',
+        limit: 1000
+      });
+      
       setProperties(propertiesData);
-      setContacts(contactsData);
+      setFilteredProperties(propertiesData);
+      
+      // Extract contacts from joined data
+      const contactsMap = new Map();
+      propertiesData.forEach(property => {
+        if (property.contact) {
+          contactsMap.set(property.contact.id, property.contact);
+        }
+      });
+      setContacts(Array.from(contactsMap.values()));
     } catch (error) {
       console.error("Error loading data:", error);
     }

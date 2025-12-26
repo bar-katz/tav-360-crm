@@ -9,6 +9,7 @@ from src.database import get_db
 from src.models import User
 from src.models.marketing_lead import MarketingLead
 from src.models.marketing_log import MarketingLog
+from src.models.do_not_call_list import DoNotCallList
 from src.utils.auth import get_current_user
 
 router = APIRouter()
@@ -32,8 +33,47 @@ async def send_whatsapp_message(
     Send WhatsApp message to a lead
     Note: This is a placeholder. Integrate with actual WhatsApp Business API
     """
-    # Format phone number (remove non-digits, add country code if needed)
+    # Check Do Not Call List
+    dnc_entry = db.query(DoNotCallList).filter(
+        DoNotCallList.phone_number == request.phone_number
+    ).first()
+    
+    if dnc_entry:
+        db.rollback()  # Rollback any pending transaction
+        raise HTTPException(
+            status_code=403,
+            detail=f"Phone number {request.phone_number} is on the Do Not Call List"
+        )
+    
+    # Also check normalized version for flexible matching
     import re
+    if not dnc_entry:
+        normalized_phone = re.sub(r'[\s\-\(\)]', '', request.phone_number)
+        dnc_entries = db.query(DoNotCallList).all()
+        for dnc in dnc_entries:
+            if dnc.phone_number:
+                dnc_normalized = re.sub(r'[\s\-\(\)]', '', dnc.phone_number)
+                if normalized_phone == dnc_normalized:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Phone number {request.phone_number} is on the Do Not Call List"
+                    )
+    
+    # Check if lead has opted out
+    if request.lead_id:
+        lead = db.query(MarketingLead).filter(MarketingLead.id == request.lead_id).first()
+        if lead:
+            # Handle both boolean and string values for opt_out_whatsapp
+            opt_out_value = lead.opt_out_whatsapp
+            if isinstance(opt_out_value, str):
+                opt_out_value = opt_out_value.lower() in ['true', 'כן', 'yes', '1']
+            if opt_out_value is True:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Lead has opted out of WhatsApp messages"
+                )
+    
+    # Format phone number (remove non-digits, add country code if needed)
     phone = re.sub(r'\D', '', request.phone_number)
     if phone.startswith('0'):
         phone = '972' + phone[1:]
@@ -76,12 +116,63 @@ async def send_bulk_whatsapp(
             results.append({"lead_id": lead_id, "status": "failed", "error": "Lead not found"})
             continue
         
+        # Check Do Not Call List (normalize phone number for comparison)
+        import re
+        if not lead.phone_number:
+            results.append({"lead_id": lead_id, "status": "failed", "error": "Lead has no phone number"})
+            continue
+            
+        normalized_lead_phone = re.sub(r'[\s\-\(\)]', '', lead.phone_number)
+        dnc_entry = db.query(DoNotCallList).filter(
+            DoNotCallList.phone_number == lead.phone_number
+        ).first()
+        
+        # Also check normalized version if exact match not found
+        if not dnc_entry:
+            dnc_entries = db.query(DoNotCallList).all()
+            for dnc in dnc_entries:
+                if dnc.phone_number:
+                    dnc_normalized = re.sub(r'[\s\-\(\)]', '', dnc.phone_number)
+                    if normalized_lead_phone == dnc_normalized:
+                        dnc_entry = dnc
+                        break
+        
+        if dnc_entry:
+            results.append({
+                "lead_id": lead_id,
+                "status": "failed",
+                "error": "Phone number is on the Do Not Call List"
+            })
+            continue
+        
+        # Check opt-out preference
+        # Refresh the lead to ensure we have the latest data
+        db.refresh(lead)
+        # Handle both boolean and string values for opt_out_whatsapp
+        opt_out_value = lead.opt_out_whatsapp
+        if isinstance(opt_out_value, str):
+            opt_out_value = opt_out_value.lower() in ['true', 'כן', 'yes', '1']
+        if opt_out_value is True:
+            results.append({
+                "lead_id": lead_id,
+                "status": "failed",
+                "error": "Lead has opted out of WhatsApp messages"
+            })
+            continue
+        
         # Personalize message
         message = request.message_template
         message = message.replace("{first_name}", lead.first_name or "")
         message = message.replace("{last_name}", lead.last_name or "")
         message = message.replace("{neighborhood}", lead.neighborhood or "")
-        message = message.replace("{budget}", str(lead.budget) if lead.budget else "")
+        # Format budget without decimals if it's a whole number
+        if lead.budget:
+            # Check if budget is a whole number by comparing with its integer conversion
+            budget_float = float(lead.budget)
+            budget_str = str(int(budget_float)) if budget_float == int(budget_float) else str(lead.budget)
+            message = message.replace("{budget}", budget_str)
+        else:
+            message = message.replace("{budget}", "")
         
         try:
             # Send message (placeholder)

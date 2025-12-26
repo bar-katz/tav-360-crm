@@ -26,7 +26,7 @@ export default function MarketingLeadsList({ leads, selectedLeads, isLoading, on
   }
 
   const allEligibleSelected = leads.length > 0 && leads
-    .filter(lead => lead.opt_out_whatsapp !== "כן")
+    .filter(lead => lead.opt_out_whatsapp !== true)
     .every(lead => selectedLeads.includes(lead.id));
 
   return (
@@ -62,7 +62,7 @@ export default function MarketingLeadsList({ leads, selectedLeads, isLoading, on
       <AnimatePresence>
         {leads.map((lead) => {
           const isSelected = selectedLeads.includes(lead.id);
-          const canSendWhatsApp = lead.opt_out_whatsapp !== "כן";
+          const canSendWhatsApp = lead.opt_out_whatsapp !== true;
           return (
             <motion.div
               key={lead.id}

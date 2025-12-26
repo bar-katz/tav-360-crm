@@ -1,0 +1,37 @@
+{
+  "name": "tav-360-crm-e2e-tests",
+  "version": "1.0.0",
+  "description": "E2E test suite for TAV 360 CRM",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:business": "playwright test tests/e2e/business-critical",
+    "test:e2e:integration": "playwright test tests/e2e/integration",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:codegen": "playwright codegen",
+    "install:browsers": "playwright install chromium",
+    "install:browsers:all": "playwright install --with-deps",
+    "install:deps": "playwright install-deps chromium"
+  },
+  "keywords": [
+    "e2e",
+    "testing",
+    "playwright",
+    "crm"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.10.9",
+    "pg": "^8.11.3",
+    "bcrypt": "^5.1.1",
+    "@types/bcrypt": "^5.0.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {}
+}
+

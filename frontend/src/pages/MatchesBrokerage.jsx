@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MatchesBrokerage } from "@/api/entities";
 import { PropertyBrokerage } from "@/api/entities";
 import { BuyersBrokerage } from "@/api/entities";
@@ -11,8 +12,10 @@ import { GenerateAndAlertMatches } from "@/api/integrations/CRMAutomation";
 
 import MatchesList from "../components/matches/MatchesList";
 import MatchesForm from "../components/matches/MatchesForm";
+import { getCategoryFromURL } from "@/utils/categoryFilters";
 
 export default function MatchesBrokeragePage() {
+  const [searchParams] = useSearchParams();
   const [matches, setMatches] = useState([]);
   const [properties, setProperties] = useState([]);
   const [buyers, setBuyers] = useState([]);
@@ -23,74 +26,92 @@ export default function MatchesBrokeragePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  // קריאת פרמטר הקטגוריה מה-URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const categoryParam = urlParams.get('category') || 'מגורים';
-
-  const filterMatches = useCallback(() => {
-    let filtered = matches.filter(match => {
-      const property = properties.find(p => p.id === match.property_id);
-      const buyer = buyers.find(b => b.id === match.buyer_id);
-      
-      if (!property || !buyer) return false;
-
-      // סינון לפי קטגוריה (מגורים/משרדים)
-      const propertyCategoryMatch = categoryParam === "מגורים"
-        ? (property.category === "פרטי" && (property.property_type === "דירה" || property.property_type === "בית פרטי"))
-        : (property.category === "מסחרי" || property.property_type === "משרד");
-      
-      const buyerCategoryMatch = categoryParam === "מגורים"
-        ? (buyer.desired_property_type === "דירה" || buyer.desired_property_type === "בית פרטי")
-        : (buyer.desired_property_type === "משרד");
-
-      // וידוא התאמה בין סוג העסקה של הנכס לבקשת הלקוח
-      // נכס מכירה = לקוח קנייה, נכס השכרה = לקוח השכרה
-      const transactionMatch = property.listing_type === buyer.request_category;
-
-      return propertyCategoryMatch && buyerCategoryMatch && transactionMatch;
-    });
-
-    // סינון לפי חיפוש
-    if (searchTerm) {
-      filtered = filtered.filter(match => {
-        const property = properties.find(p => p.id === match.property_id);
-        const buyer = buyers.find(b => b.id === match.buyer_id);
-        return property?.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-               buyer?.city?.toLowerCase().includes(searchTerm.toLowerCase());
-      });
-    }
-
-    setFilteredMatches(filtered);
-  }, [matches, searchTerm, categoryParam, properties, buyers]);
+  // קריאת פרמטר הקטגוריה מה-URL - using unified utility with React Router
+  const categoryParam = getCategoryFromURL("מגורים", searchParams);
 
   useEffect(() => {
     loadData();
-  }, []);
-
-  useEffect(() => {
-    filterMatches();
-  }, [filterMatches]);
+  }, [categoryParam, searchTerm]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
       console.log("טוען נתונים...");
-      const [matchesData, propertiesData, buyersData, contactsData] = await Promise.all([
-        MatchesBrokerage.list("-created_date"),
-        PropertyBrokerage.list("-created_date"),
-        BuyersBrokerage.list("-created_date"),
-        Contact.list("-created_date")
-      ]);
+      
+      // Use PostgREST to load matches with joined property, client, and contact data
+      const postgrestFilters = {};
+      
+      // Search filter (will filter on joined property/buyer cities)
+      if (searchTerm) {
+        postgrestFilters.or = `(property.city.ilike.*${searchTerm}*,client.city.ilike.*${searchTerm}*)`;
+      }
+      
+      // Load matches with all related data in one query
+      const matchesData = await MatchesBrokerage.list(postgrestFilters, {
+        select: ['*', 'property(*,contact(*))', 'client(*,contact(*))'],
+        order: 'created_date.desc',
+        limit: 1000
+      });
 
       console.log("התאמות נטענו:", matchesData.length, "התאמות");
-      console.log("נכסים נטענו:", propertiesData.length, "נכסים");
-      console.log("לקוחות נטענו:", buyersData.length, "לקוחות");
-      console.log("אנשי קשר נטענו:", contactsData.length, "אנשי קשר");
 
-      setMatches(matchesData);
-      setProperties(propertiesData);
-      setBuyers(buyersData);
-      setContacts(contactsData);
+      // Filter by category using RPC function or client-side (simpler for now)
+      let filteredMatches = matchesData;
+      if (categoryParam) {
+        // Use RPC function for category filtering
+        try {
+          filteredMatches = await MatchesBrokerage.rpc('filter_matches_by_category', {
+            category_param: categoryParam
+          });
+          // Join property and client data back
+          const matchIds = new Set(filteredMatches.map(m => m.id));
+          filteredMatches = matchesData.filter(m => matchIds.has(m.id));
+        } catch (error) {
+          console.warn("RPC filter failed, using client-side filter:", error);
+          // Fallback to client-side filtering
+          filteredMatches = matchesData.filter(match => {
+            const property = match.property;
+            const client = match.client;
+            if (!property || !client) return false;
+            
+            if (categoryParam === "מגורים") {
+              return property.category === "מגורים" && 
+                     ['דירה', 'בית פרטי', 'בית'].includes(client.preferred_property_type);
+            } else if (categoryParam === "משרדים") {
+              return property.category === "משרדים" && 
+                     ['משרד', 'מסחרי'].includes(client.preferred_property_type);
+            }
+            return true;
+          });
+        }
+      }
+
+      setMatches(filteredMatches);
+      setFilteredMatches(filteredMatches);
+      
+      // Extract properties, buyers, and contacts from joined data
+      const propertiesMap = new Map();
+      const buyersMap = new Map();
+      const contactsMap = new Map();
+      
+      filteredMatches.forEach(match => {
+        if (match.property) {
+          propertiesMap.set(match.property.id, match.property);
+          if (match.property.contact) {
+            contactsMap.set(match.property.contact.id, match.property.contact);
+          }
+        }
+        if (match.client) {
+          buyersMap.set(match.client.id, match.client);
+          if (match.client.contact) {
+            contactsMap.set(match.client.contact.id, match.client.contact);
+          }
+        }
+      });
+      
+      setProperties(Array.from(propertiesMap.values()));
+      setBuyers(Array.from(buyersMap.values()));
+      setContacts(Array.from(contactsMap.values()));
     } catch (error) {
       console.error("Error loading data:", error);
     }
@@ -102,50 +123,18 @@ export default function MatchesBrokeragePage() {
     try {
       console.log("יוצר התאמות אוטומטיות עם התראות...");
 
-      const [currentProperties, currentBuyers, existingMatches] = await Promise.all([
-        PropertyBrokerage.list(),
-        BuyersBrokerage.list(),
-        MatchesBrokerage.list()
-      ]);
-
-      const existingMatchSet = new Set(existingMatches.map(m => `${m.property_id}_${m.buyer_id}`));
-      const matchesToCreate = [];
-
-      for (const buyer of currentBuyers) {
-        for (const property of currentProperties) {
-          const matchKey = `${property.id}_${buyer.id}`;
-
-          if (existingMatchSet.has(matchKey)) {
-            continue;
-          }
-
-          // בדיקת התאמה בסיסית + התאמת סוג עסקה
-          const areaMatch = property.area === buyer.desired_area;
-          const roomsMatch = property.rooms === buyer.desired_rooms;
-          const typeMatch = property.property_type === buyer.desired_property_type;
-          const transactionMatch = property.listing_type === buyer.request_category;
-          const budgetMatch = property.price && buyer.budget ?
-            property.price <= (buyer.budget * 1.10) : false;
-
-          if (areaMatch && roomsMatch && typeMatch && transactionMatch && budgetMatch) {
-            matchesToCreate.push({
-              property_id: property.id,
-              buyer_id: buyer.id,
-              match_score: 85,
-              status: 'הותאם'
-            });
-            existingMatchSet.add(matchKey);
-          }
-        }
-      }
-
-      if (matchesToCreate.length > 0) {
-        await MatchesBrokerage.bulkCreate(matchesToCreate);
-        
+      // Use PostgreSQL function via PostgREST RPC
+      const result = await MatchesBrokerage.rpcPost('create_matches_from_generation', {
+        category_param: categoryParam || null
+      });
+      
+      const createdCount = result.created_count || 0;
+      
+      if (createdCount > 0) {
         // שליחת התראה על התאמות חדשות באמצעות הפונקציה המובנית
         await GenerateAndAlertMatches({});
         
-        alert(`נוצרו ${matchesToCreate.length} התאמות חדשות! נשלחה התראה למנהל המערכת.`);
+        alert(`נוצרו ${createdCount} התאמות חדשות! נשלחה התראה למנהל המערכת.`);
       } else {
         alert("לא נמצאו התאמות חדשות");
       }
@@ -169,7 +158,7 @@ export default function MatchesBrokeragePage() {
         console.log("יצירת התאמה חדשה");
         const existing = await MatchesBrokerage.filter({ 
           property_id: matchData.property_id, 
-          buyer_id: matchData.buyer_id 
+          client_id: matchData.buyer_id || matchData.client_id 
         });
 
         if (existing.length > 0) {
@@ -260,19 +249,15 @@ export default function MatchesBrokeragePage() {
           {showForm && (
             <MatchesForm
               match={editingMatch}
-              properties={properties.filter(p => {
-                if (categoryParam === "מגורים") {
-                  return p.category === "פרטי" && (p.property_type === "דירה" || p.property_type === "בית פרטי");
-                } else {
-                  return p.category === "מסחרי" || p.property_type === "משרד";
-                }
-              })}
+              properties={properties.filter(p => !categoryParam || p.category === categoryParam)}
               buyers={buyers.filter(b => {
+                if (!categoryParam) return true;
                 if (categoryParam === "מגורים") {
-                  return b.desired_property_type === "דירה" || b.desired_property_type === "בית פרטי";
-                } else {
-                  return b.desired_property_type === "משרד";
+                  return ['דירה', 'בית פרטי', 'בית'].includes(b.preferred_property_type);
+                } else if (categoryParam === "משרדים") {
+                  return ['משרד', 'מסחרי'].includes(b.preferred_property_type);
                 }
+                return true;
               })}
               onSubmit={handleSubmit}
               onCancel={() => {

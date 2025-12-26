@@ -103,36 +103,86 @@ async def get_brokerage_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get brokerage dashboard statistics"""
+    """Get brokerage dashboard statistics
+    
+    Filtering logic matches frontend:
+    - Properties: filtered by category
+    - Buyers: filtered by preferred_property_type matching category
+    - Matches: filtered by property category AND buyer property type AND transaction type match
+    """
     # Base queries
     properties_query = db.query(Property)
     buyers_query = db.query(Client)
-    matches_query = db.query(Match)
+    matches_query = db.query(Match).join(Property).join(Client)
     marketing_leads_query = db.query(MarketingLead)
     
     # Filter by category if provided
     if category == "מגורים":
         properties_query = properties_query.filter(
-            or_(
-                Property.property_type == "דירה",
-                Property.property_type == "בית פרטי"
-            )
+            Property.category == "מגורים"
         )
         buyers_query = buyers_query.filter(
             or_(
                 Client.preferred_property_type == "דירה",
-                Client.preferred_property_type == "בית פרטי"
+                Client.preferred_property_type == "בית פרטי",
+                Client.preferred_property_type == "בית"  # Legacy value for backward compatibility
+            )
+        )
+        # Filter matches: property category AND buyer property type AND transaction type match
+        matches_query = matches_query.filter(
+            and_(
+                Property.category == "מגורים",
+                or_(
+                    Client.preferred_property_type == "דירה",
+                    Client.preferred_property_type == "בית פרטי",
+                    Client.preferred_property_type == "בית"  # Legacy value for backward compatibility
+                ),
+                # Transaction type match: property listing_type should match client request_type
+                # Handle both Hebrew variations: מכירה/השכרה vs קנייה/שכירות
+                or_(
+                    Property.listing_type == Client.request_type,
+                    and_(
+                        Property.listing_type == "מכירה",
+                        Client.request_type == "קנייה"
+                    ),
+                    and_(
+                        Property.listing_type == "השכרה",
+                        Client.request_type == "שכירות"
+                    )
+                )
             )
         )
     elif category == "משרדים":
         properties_query = properties_query.filter(
-            or_(
-                Property.category == "מסחרי",
-                Property.property_type == "משרד"
-            )
+            Property.category == "משרדים"
         )
         buyers_query = buyers_query.filter(
-            Client.preferred_property_type == "משרד"
+            or_(
+                Client.preferred_property_type == "משרד",
+                Client.preferred_property_type == "מסחרי"
+            )
+        )
+        # Filter matches: property category AND buyer property type AND transaction type match
+        matches_query = matches_query.filter(
+            and_(
+                Property.category == "משרדים",
+                or_(
+                    Client.preferred_property_type == "משרד",
+                    Client.preferred_property_type == "מסחרי"
+                ),
+                # Transaction type match
+                or_(
+                    Property.listing_type == Client.request_type,
+                    and_(
+                        Property.listing_type == "מכירה",
+                        Client.request_type == "קנייה"
+                    ),
+                    and_(
+                        Property.listing_type == "השכרה",
+                        Client.request_type == "שכירות"
+                    )
+                )
+            )
         )
     
     # Counts
@@ -262,4 +312,98 @@ async def get_recent_activity(
     # Sort by time and limit
     activities.sort(key=lambda x: x["time"] or "", reverse=True)
     return activities[:limit]
+
+@router.get("/alerts")
+async def get_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get alerts - complex business logic for dashboard alerts panel"""
+    now = datetime.utcnow()
+    four_hours_ago = now - timedelta(hours=4)
+    one_day_ago = now - timedelta(days=1)
+    tomorrow = now + timedelta(days=1)
+    
+    # Untreated leads (buyers with status="קונה חדש" created >4 hours ago)
+    untreated_leads = db.query(Client).join(Contact).filter(
+        and_(
+            Client.status == "קונה חדש",
+            Client.created_date <= four_hours_ago
+        )
+    ).all()
+    
+    untreated_leads_data = []
+    for buyer in untreated_leads:
+        contact = db.query(Contact).filter(Contact.id == buyer.contact_id).first()
+        hours_ago = int((now - buyer.created_date).total_seconds() / 3600)
+        untreated_leads_data.append({
+            "id": buyer.id,
+            "contact": {
+                "id": contact.id if contact else None,
+                "full_name": contact.full_name if contact else None
+            },
+            "created_date": buyer.created_date.isoformat() if buyer.created_date else None,
+            "hours_ago": hours_ago,
+            "desired_property_type": buyer.preferred_property_type,
+            "request_category": buyer.request_type,
+            "budget": float(buyer.budget) if buyer.budget else None
+        })
+    
+    # Recent matches (created in last 24 hours)
+    recent_matches = db.query(Match).filter(
+        Match.created_date >= one_day_ago
+    ).order_by(Match.created_date.desc()).limit(5).all()
+    
+    recent_matches_data = []
+    for match in recent_matches:
+        recent_matches_data.append({
+            "id": match.id,
+            "match_score": match.match_score,
+            "created_date": match.created_date.isoformat() if match.created_date else None
+        })
+    
+    # Urgent service calls (urgency="דחוף" or "גבוהה")
+    from src.models.service_call import ServiceCallStatus
+    urgent_service_calls = db.query(ServiceCall).filter(
+        or_(
+            ServiceCall.urgency == "דחוף",
+            ServiceCall.urgency == "גבוהה"
+        )
+    ).order_by(ServiceCall.created_date.desc()).limit(10).all()
+    
+    urgent_service_calls_data = []
+    for call in urgent_service_calls:
+        call_number = getattr(call, 'call_number', None) or str(call.id)[-4:]
+        urgent_service_calls_data.append({
+            "id": call.id,
+            "call_number": call_number,
+            "urgency": call.urgency,
+            "description": call.description,
+            "status": call.status.value if hasattr(call.status, 'value') else str(call.status)
+        })
+    
+    # Urgent meetings (within 24 hours)
+    urgent_meetings = db.query(Meeting).filter(
+        and_(
+            Meeting.start_date >= now,
+            Meeting.start_date <= tomorrow
+        )
+    ).order_by(Meeting.start_date.asc()).limit(10).all()
+    
+    urgent_meetings_data = []
+    for meeting in urgent_meetings:
+        urgent_meetings_data.append({
+            "id": meeting.id,
+            "title": meeting.title,
+            "meeting_type": getattr(meeting, 'meeting_type', None),
+            "start_date": meeting.start_date.isoformat() if meeting.start_date else None
+        })
+    
+    return {
+        "untreated_leads": untreated_leads_data,
+        "recent_matches": recent_matches_data,
+        "urgent_service_calls": urgent_service_calls_data,
+        "urgent_meetings": urgent_meetings_data,
+        "total_alerts": len(untreated_leads_data) + len(urgent_service_calls_data) + len(urgent_meetings_data)
+    }
 

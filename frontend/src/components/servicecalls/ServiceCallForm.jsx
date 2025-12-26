@@ -38,6 +38,9 @@ export default function ServiceCallForm({ serviceCall, contacts, properties, sup
     if (serviceCall) {
       setFormData({ 
         ...serviceCall,
+        contact_id: serviceCall.contact_id ? String(serviceCall.contact_id) : '',
+        property_id: serviceCall.property_id ? String(serviceCall.property_id) : '',
+        supplier_id: serviceCall.supplier_id ? String(serviceCall.supplier_id) : '',
         total_cost: serviceCall.total_cost || ''
       });
     } else {
@@ -78,9 +81,9 @@ export default function ServiceCallForm({ serviceCall, contacts, properties, sup
     handleInputChange('contact_id', contactId);
     
     // Find if this contact is a tenant and auto-fill property
-    const tenant = tenants.find(t => t.contact_id === contactId);
+    const tenant = tenants.find(t => String(t.contact_id) === String(contactId));
     if (tenant && tenant.current_property_id) {
-      handleInputChange('property_id', tenant.current_property_id);
+      handleInputChange('property_id', String(tenant.current_property_id));
       setIsPropertyAutoFilled(true);
     } else {
       handleInputChange('property_id', '');
@@ -90,7 +93,8 @@ export default function ServiceCallForm({ serviceCall, contacts, properties, sup
 
   // Get contact display with tenant indication
   const getContactDisplay = (contact) => {
-    const tenant = tenants.find(t => t.contact_id === contact.id);
+    if (!contact) return '';
+    const tenant = tenants.find(t => String(t.contact_id) === String(contact.id));
     const baseDisplay = `${contact.full_name}${contact.phone ? ` - ${contact.phone}` : ''}`;
     return tenant ? `${baseDisplay} (דייר)` : baseDisplay;
   };
@@ -134,13 +138,13 @@ export default function ServiceCallForm({ serviceCall, contacts, properties, sup
 
               <div className="space-y-2">
                 <Label htmlFor="contact_id">איש קשר *</Label>
-                <Select value={formData.contact_id} onValueChange={handleContactChange} required>
+                <Select value={formData.contact_id && formData.contact_id !== '' ? String(formData.contact_id) : undefined} onValueChange={handleContactChange} required>
                   <SelectTrigger>
                     <SelectValue placeholder="בחר איש קשר" />
                   </SelectTrigger>
                   <SelectContent>
                     {contacts.map((contact) => (
-                      <SelectItem key={contact.id} value={contact.id}>
+                      <SelectItem key={contact.id} value={String(contact.id)}>
                         {getContactDisplay(contact)}
                       </SelectItem>
                     ))}
@@ -151,7 +155,7 @@ export default function ServiceCallForm({ serviceCall, contacts, properties, sup
               <div className="space-y-2">
                 <Label htmlFor="property_id">נכס</Label>
                 <Select 
-                  value={formData.property_id} 
+                  value={formData.property_id && formData.property_id !== '' ? String(formData.property_id) : undefined} 
                   onValueChange={(value) => {
                     handleInputChange('property_id', value);
                     setIsPropertyAutoFilled(false);
@@ -163,7 +167,7 @@ export default function ServiceCallForm({ serviceCall, contacts, properties, sup
                   </SelectTrigger>
                   <SelectContent>
                     {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
+                      <SelectItem key={property.id} value={String(property.id)}>
                         {property.property_type} ב{property.city} - {property.street} {property.building_number}
                         {property.apartment_number && ` דירה ${property.apartment_number}`}
                       </SelectItem>
@@ -205,13 +209,13 @@ export default function ServiceCallForm({ serviceCall, contacts, properties, sup
 
               <div className="space-y-2">
                 <Label htmlFor="supplier_id">ספק</Label>
-                <Select value={formData.supplier_id} onValueChange={(value) => handleInputChange('supplier_id', value)}>
+                <Select value={formData.supplier_id && formData.supplier_id !== '' ? String(formData.supplier_id) : undefined} onValueChange={(value) => handleInputChange('supplier_id', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="בחר ספק" />
                   </SelectTrigger>
                   <SelectContent>
                     {suppliers.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
+                      <SelectItem key={supplier.id} value={String(supplier.id)}>
                         {supplier.name} - {supplier.specialization}
                       </SelectItem>
                     ))}

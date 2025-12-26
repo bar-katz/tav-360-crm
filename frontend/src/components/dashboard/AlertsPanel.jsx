@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Clock, Phone, Users, Target, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { BuyersBrokerage, MatchesBrokerage, Contact } from "@/api/entities";
+import { apiClient } from "@/api/apiClient";
 
 export default function AlertsPanel() {
   const [untreatedLeads, setUntreatedLeads] = useState([]);
@@ -23,49 +23,13 @@ export default function AlertsPanel() {
   const loadAlerts = async () => {
     setIsLoadingAlerts(true);
     try {
-      // טעינת לידים שלא טופלו במשך 4+ שעות
-      const buyers = await BuyersBrokerage.list("-created_date");
-      const contacts = await Contact.list();
+      // Load alerts from backend endpoint
+      const alertsData = await apiClient.get('/dashboard/alerts');
       
-      const now = new Date();
-      const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-      
-      const untreated = buyers.filter(buyer => {
-        const createdDate = new Date(buyer.created_date);
-        return buyer.status === "קונה חדש" && createdDate <= fourHoursAgo;
-      }).map(buyer => {
-        const contact = contacts.find(c => c.id === buyer.contact_id);
-        return { ...buyer, contact };
-      });
-
-      setUntreatedLeads(untreated);
-
-      // טעינת התאמות חדשות מהיום האחרון
-      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const matches = await MatchesBrokerage.list("-created_date", 5);
-      const recentMatchesData = matches.filter(match => 
-        new Date(match.created_date) >= oneDayAgo
-      );
-
-      setRecentMatches(recentMatchesData);
-      
-      // Load urgent service calls
-      const { ServiceCall } = await import("@/api/entities");
-      const allServiceCalls = await ServiceCall.list("-created_date", 50);
-      const urgentCalls = allServiceCalls.filter(call => 
-        call && (call.urgency === "דחוף" || call.urgency === "גבוהה")
-      );
-      setUrgentServiceCalls(urgentCalls);
-      
-      // Load urgent meetings (within 24 hours)
-      const { Meeting } = await import("@/api/entities");
-      const allMeetings = await Meeting.list("-start_date", 50);
-      const now = new Date();
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const urgent = allMeetings.filter(m => 
-        m.start_date && new Date(m.start_date) <= tomorrow && new Date(m.start_date) >= now
-      );
-      setUrgentMeetings(urgent);
+      setUntreatedLeads(alertsData.untreated_leads || []);
+      setRecentMatches(alertsData.recent_matches || []);
+      setUrgentServiceCalls(alertsData.urgent_service_calls || []);
+      setUrgentMeetings(alertsData.urgent_meetings || []);
       
     } catch (error) {
       console.error("Error loading alerts:", error);
@@ -76,29 +40,17 @@ export default function AlertsPanel() {
   const handleSendAlerts = async () => {
     setIsSendingAlerts(true);
     try {
-      // Re-implementing the check logic directly in the frontend
-      const buyers = await BuyersBrokerage.list();
-      const contacts = await Contact.list();
+      // Reload alerts (backend handles the logic)
+      await loadAlerts();
       
-      const now = new Date();
-      const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-      
-      const untreated = buyers.filter(buyer => {
-        const createdDate = new Date(buyer.created_date);
-        return buyer.status === "קונה חדש" && createdDate <= fourHoursAgo;
-      });
-
-      if (untreated.length > 0) {
-        const leadNames = untreated.map(lead => {
-          const contact = contacts.find(c => c.id === lead.contact_id);
-          return contact ? contact.full_name : `ליד ${lead.id}`;
-        }).join(', ');
-        alert(`נמצאו ${untreated.length} לידים שלא טופלו למעלה מ-4 שעות: ${leadNames}. אנא טפל בהם.`);
+      if (untreatedLeads.length > 0) {
+        const leadNames = untreatedLeads.map(lead => 
+          lead.contact?.full_name || `ליד ${lead.id}`
+        ).join(', ');
+        alert(`נמצאו ${untreatedLeads.length} לידים שלא טופלו למעלה מ-4 שעות: ${leadNames}. אנא טפל בהם.`);
       } else {
         alert("לא נמצאו לידים הדורשים טיפול מיידי.");
       }
-      
-      await loadAlerts(); // Refresh the panel
     } catch (error) {
       console.error("Error checking for unanswered leads:", error);
       alert("שגיאה בבדיקת לידים שלא טופלו.");
@@ -168,11 +120,11 @@ export default function AlertsPanel() {
                           {lead.contact?.full_name || 'ללא שם'}
                         </p>
                         <Badge className="bg-red-100 text-red-800 text-xs">
-                          {Math.floor((new Date() - new Date(lead.created_date)) / (1000 * 60 * 60))} שעות
+                          {lead.hours_ago || 0} שעות
                         </Badge>
                       </div>
                       <p className="text-red-700 text-sm">
-                        {lead.desired_property_type} - {lead.request_category}
+                        {lead.desired_property_type || lead.preferred_property_type} - {lead.request_category || lead.request_type}
                         {lead.budget && ` (${lead.budget.toLocaleString()} ₪)`}
                       </p>
                     </div>

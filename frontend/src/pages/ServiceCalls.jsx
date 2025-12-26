@@ -6,8 +6,9 @@ import { PropertyOwner } from "@/api/entities";
 import { Supplier } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Phone } from "lucide-react";
+import { Plus, Search, Phone, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import ServiceCallList from "../components/servicecalls/ServiceCallList";
 import ServiceCallForm from "../components/servicecalls/ServiceCallForm";
@@ -27,6 +28,7 @@ export default function ServiceCalls() {
     urgency: "all"
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -73,17 +75,43 @@ export default function ServiceCalls() {
   };
 
   const handleSubmit = async (serviceCallData) => {
+    setError(null);
     try {
+      // Validate required fields
+      if (!serviceCallData.contact_id) {
+        setError("יש לבחור איש קשר");
+        return;
+      }
+      if (!serviceCallData.handler || !serviceCallData.handler.trim()) {
+        setError("שדה 'בטיפול של' הוא חובה");
+        return;
+      }
+      if (!serviceCallData.description || !serviceCallData.description.trim()) {
+        setError("שדה 'תיאור הבעיה' הוא חובה");
+        return;
+      }
+
+      // Convert string IDs back to numbers for API
+      const dataToSubmit = {
+        ...serviceCallData,
+        contact_id: serviceCallData.contact_id ? parseInt(serviceCallData.contact_id) : null,
+        property_id: serviceCallData.property_id ? parseInt(serviceCallData.property_id) : null,
+        supplier_id: serviceCallData.supplier_id ? parseInt(serviceCallData.supplier_id) : null,
+      };
+
       if (editingServiceCall) {
-        await ServiceCall.update(editingServiceCall.id, serviceCallData);
+        await ServiceCall.update(editingServiceCall.id, dataToSubmit);
       } else {
-        await ServiceCall.create(serviceCallData);
+        await ServiceCall.create(dataToSubmit);
       }
       setShowForm(false);
       setEditingServiceCall(null);
+      setError(null);
       loadData();
     } catch (error) {
       console.error("Error saving service call:", error);
+      const errorMessage = error.response?.data?.detail || error.message || "אירעה שגיאה בשמירת קריאת השירות. אנא נסה שוב.";
+      setError(errorMessage);
     }
   };
 
@@ -160,6 +188,13 @@ export default function ServiceCalls() {
               </div>
             </motion.div>
 
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
             {showForm && (
               <ServiceCallForm
                 serviceCall={editingServiceCall}
@@ -170,6 +205,7 @@ export default function ServiceCalls() {
                 onCancel={() => {
                   setShowForm(false);
                   setEditingServiceCall(null);
+                  setError(null);
                 }}
               />
             )}

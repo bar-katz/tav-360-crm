@@ -16,7 +16,7 @@ export default function PropertyBrokerageForm({ property, contacts, onSubmit, on
     handler: "",
     source: "מאגר",
     status: "נכס חדש",
-    category: "פרטי",
+    category: "מגורים",
     listing_type: "מכירה",
     property_type: "דירה",
     price: "",
@@ -204,8 +204,8 @@ export default function PropertyBrokerageForm({ property, contacts, onSubmit, on
                 <SelectValue placeholder="בחר קטגוריה" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="פרטי">פרטי</SelectItem>
-                <SelectItem value="מסחרי">מסחרי</SelectItem>
+                <SelectItem value="מגורים">מגורים</SelectItem>
+                <SelectItem value="משרדים">משרדים</SelectItem>
               </SelectContent>
             </Select>
           </div>

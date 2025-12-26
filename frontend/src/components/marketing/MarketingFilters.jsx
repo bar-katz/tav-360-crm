@@ -13,7 +13,7 @@ export default function MarketingFilters({ filters, onFiltersChange, leads }) {
 
   const filterCounts = {
     all: leads.length,
-    eligible: leads.filter(lead => lead.opt_out_whatsapp !== "כן").length,
+    eligible: leads.filter(lead => lead.opt_out_whatsapp !== true).length,
     by_client_type: leads.reduce((acc, lead) => {
       acc[lead.client_type] = (acc[lead.client_type] || 0) + 1;
       return acc;

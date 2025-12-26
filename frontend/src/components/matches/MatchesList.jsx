@@ -44,10 +44,11 @@ export default function MatchesList({ matches, properties, buyers, contacts, isL
   // פילטור התאמות תקינות בלבד
   const validMatches = matches.filter(match => {
     const property = getPropertyById(match.property_id);
-    const buyer = getBuyerById(match.buyer_id);
+    // Match model uses client_id, but frontend may receive it as buyer_id or client_id
+    const buyer = getBuyerById(match.buyer_id || match.client_id);
     
     if (!property || !buyer) {
-      console.warn(`התאמה פגומה נמצאה - מתעלם: ${match.id}, property: ${match.property_id}, buyer: ${match.buyer_id}`);
+      console.warn(`התאמה פגומה נמצאה - מתעלם: ${match.id}, property: ${match.property_id}, buyer: ${match.buyer_id || match.client_id}`);
       return false;
     }
     return true;
@@ -80,9 +81,14 @@ export default function MatchesList({ matches, properties, buyers, contacts, isL
       <AnimatePresence>
         {validMatches.map((match, index) => {
           const property = getPropertyById(match.property_id);
-          const buyer = getBuyerById(match.buyer_id);
+          const buyer = getBuyerById(match.buyer_id || match.client_id);
           const buyerContact = buyer ? getContactById(buyer.contact_id) : null;
           const propertyContact = property ? getContactById(property.contact_id) : null;
+          
+          // Database fields: preferred_property_type, neighborhood, preferred_rooms, request_type
+          const buyerPropertyType = buyer?.preferred_property_type || buyer?.desired_property_type;
+          const buyerArea = buyer?.neighborhood || buyer?.desired_area;
+          const buyerRooms = buyer?.preferred_rooms || buyer?.desired_rooms;
 
           return (
             <motion.div
@@ -132,19 +138,19 @@ export default function MatchesList({ matches, properties, buyers, contacts, isL
                     <hr/>
                     <div className="text-sm text-slate-700 flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-slate-500" /> 
-                      <strong>סוג נכס:</strong> {buyer.desired_property_type}
+                      <strong>סוג נכס:</strong> {buyerPropertyType || 'לא צוין'}
                     </div>
                     <div className="text-sm text-slate-700 flex items-center gap-2">
                       <Home className="w-4 h-4 text-slate-500" /> 
-                      <strong>אזור:</strong> {buyer.desired_area}
+                      <strong>אזור:</strong> {buyerArea || 'לא צוין'}
                     </div>
                     <div className="text-sm text-slate-700 flex items-center gap-2">
                       <Wallet className="w-4 h-4 text-slate-500" /> 
-                      <strong>תקציב:</strong> {buyer.budget ? `${buyer.budget.toLocaleString()} ₪` : 'לא צוין'}
+                      <strong>תקציב:</strong> {buyer?.budget ? `${buyer.budget.toLocaleString()} ₪` : 'לא צוין'}
                     </div>
                     <div className="text-sm text-slate-700 flex items-center gap-2">
                       <Home className="w-4 h-4 text-slate-500" /> 
-                      <strong>חדרים מבוקשים:</strong> {buyer.desired_rooms}
+                      <strong>חדרים מבוקשים:</strong> {buyerRooms || 'לא צוין'}
                     </div>
                   </div>
                   

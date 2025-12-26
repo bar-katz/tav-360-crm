@@ -13,7 +13,15 @@ export default function BuyersFilters({ filters, onFiltersChange, buyers }) {
   };
 
   const getUniqueValues = (field) => {
-    return [...new Set(buyers.map(b => b[field]).filter(Boolean))];
+    return [...new Set(buyers.map(b => {
+      // Handle field name mapping for compatibility
+      if (field === 'request_category') {
+        return b.request_type || b.request_category;
+      } else if (field === 'desired_property_type') {
+        return b.preferred_property_type || b.desired_property_type;
+      }
+      return b[field];
+    }).filter(Boolean))];
   };
 
   const filterCounts = {

@@ -1,0 +1,27 @@
+# Test results
+test-results/
+test-results.json
+
+# Test data
+test-data/
+*.pdf
+*.exe
+
+# Node modules
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Build output
+dist/
+
+# Playwright
+playwright-report/
+playwright/.cache/
+
+# Logs
+*.log
+npm-debug.log*
+

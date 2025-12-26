@@ -12,18 +12,18 @@ function createEntity(entityName: string) {
 
 // Create entity classes for all entities
 export const Contact = createEntity('contact');
-export const Property = createEntity('property');
+export const Property = createEntity('property'); // Backend auto-adds 's' -> 'propertys'
 export const Client = createEntity('client');
 export const Meeting = createEntity('meeting');
 export const Task = createEntity('task');
 export const ServiceCall = createEntity('servicecall');
 export const Supplier = createEntity('supplier');
 export const Project = createEntity('project');
-export const PropertyBrokerage = createEntity('property');
+export const PropertyBrokerage = createEntity('property'); // Backend auto-adds 's' -> 'propertys'
 export const BuyersRenters = createEntity('client');
 export const Matches = createEntity('match');
 export const BuyersBrokerage = createEntity('client');
-export const PropertyInventory = createEntity('property');
+export const PropertyInventory = createEntity('property'); // Backend auto-adds 's' -> 'propertys'
 export const MatchesBrokerage = createEntity('match');
 export const PropertyOwner = createEntity('propertyowner');
 export const Tenant = createEntity('tenant');

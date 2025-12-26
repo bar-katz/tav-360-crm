@@ -21,7 +21,7 @@ const COLUMN_MAPPING = {
   'סוג לקוח': 'client_type',
   'רצינות': 'seriousness',
   'הערות נוספות': 'additional_notes',
-  'ביקש לא לקבל דיוור': 'opt_out_whatsapp'
+  'ביקש לא לקבל דיוור': 'opt_out_whatsapp_boolean'
 };
 
 export default function ExcelImport({ onSuccess, onCancel }) {
@@ -200,6 +200,10 @@ export default function ExcelImport({ onSuccess, onCancel }) {
             value = cleanBudget(value);
           } else if (systemField === 'rooms_min' || systemField === 'rooms_max') {
             value = value ? parseInt(value) || 0 : 0;
+          } else if (systemField === 'opt_out_whatsapp_boolean') {
+            // Convert Hebrew/Excel boolean values to actual boolean
+            value = value && (value.toString().toLowerCase() === 'כן' || value.toString().toLowerCase() === 'true' || value === 1 || value === '1');
+            systemField = 'opt_out_whatsapp'; // Map back to the correct field name
           }
           
           if (value !== '' && value !== null && value !== undefined) {
